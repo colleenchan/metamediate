@@ -2,7 +2,7 @@ Package: metamediate
 Type: Package
 Title: Estimate Pooled Total Effects in Meta-Analysis 
 Version: 0.1.0
-Author: Who wrote it
+Author: Colleen Chan <colleen.chan@yale.edu>
 Maintainer: Colleen Chan <colleen.chan@yale.edu>
 Description: Estimation of pooled total effects and mediation proportions in meta-analysis.
 License: GPL-3
