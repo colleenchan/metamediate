@@ -11,11 +11,11 @@ meta-analysis.
 
 ## Installation
 
-You can install the released version of metamediate from
-[CRAN](https://CRAN.R-project.org) with:
+You can install the most updated version of metamediate as follows:
 
 ``` r
-install.packages("metamediate")
+library(devtools)
+devtools::install_github("colleenchan/metamediate")
 ```
 
 ## Example
@@ -24,5 +24,4 @@ This is a basic example which shows you how to solve a common problem:
 
 ``` r
 library(metamediate)
-## basic example code
 ```

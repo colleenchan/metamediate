@@ -28,7 +28,7 @@
 #' @import stats
 #'
 #' @examples
-medmeta <- function(te,
+metamed <- function(te,
                     te_lb,
                     te_ub = NULL,
                     de,
@@ -39,10 +39,17 @@ medmeta <- function(te,
                     serv,
                     stdserv,
                     rr = "exp",
-                    pmodel = "fixed",
+                    pmodel = NULL,
                     prec = 3,
                     weight.prec = 2){
-  #TODO check args
+
+  # argument checks
+  if (!rr %in% c("exp", "identity"))
+    stop("Relative risk function form must be specified as either \"exp\" or
+         \"identity\"")
+  if (!pmodel %in% c("fixed", "random") & !is.null(pmodel))
+    stop("Back-calculated pooled mediation proportion function must be
+         specified as either \"random\" or \"fixed\" effects")
 
   # get indices from type of study
   sb_ind <- !is.na(te) & !is.na(de)
@@ -155,7 +162,6 @@ medmeta <- function(te,
 
   # heterogeneity stats for MP
   Q_te <- sum(te_w.fix * te^2) - sum(te_w.fix * te)^2 / sum(te_w.fix)
-  #Q_te <- sum(te_w.fix*c(te[!sd_ind], tebc)^2) - sum(te_w.fix*c(te[!sd_ind], tebc))^2 / sum(te_w.fix)
   df_te <- length(te)
   C_te <- sum(te_w.fix) - sum(te_w.fix^2)/sum(te_w.fix)
   tausq_te <- (Q_te - df_te ) / C_te
