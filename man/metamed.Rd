@@ -60,3 +60,30 @@ heterogeneity statistics
 Estimates a pooled mediation proportion and total effects and
 outputs results in data frame
 }
+\examples{
+S <- 30
+ST <- 10
+SB <- 10
+SD <- 10
+set.seed(1)
+beta.T <- rnorm(ST + SB, mean = 0.3, sd = 0.05)
+set.seed(1)
+beta.D <- rnorm(SD + SB, mean = 0.2, sd = 0.05)
+set.seed(1)
+var.beta.T <- rnorm(ST + SB, mean = 0.05, sd = 0.01)
+set.seed(1)
+var.beta.D <- rnorm(SD + SB, mean = 0.05, sd = 0.01)
+df <- data.frame(beta.T = c(beta.T, rep(NA, SD)),
+                 beta.D = c(rep(NA, ST), beta.D),
+                 var.beta.T = c(var.beta.T, rep(NA, SD)),
+                 var.beta.D = c(rep(NA, ST), var.beta.D))
+res <- metamed(te = df$beta.T,
+               te_lb = df$beta.T - qnorm(0.975) * sqrt(df$var.beta.T),
+               de = df$beta.D,
+               de_lb = df$beta.D - qnorm(0.975) * sqrt(df$var.beta.D),
+               author = paste("Study", seq(1:S)),
+               serv = 1,
+               stdserv = 1,
+               rr = "identity",
+               pmodel = "fixed")
+}
