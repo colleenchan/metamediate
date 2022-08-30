@@ -1,8 +1,8 @@
 
 
 #' @title metamed
-#' @description Estimates a pooled mediation proportion and total effects and
-#' outputs results in data frame
+#' @description Estimation of a summary mediation proportion and summary total
+#' effect
 #'
 #'
 #' @param te total effect estimates from each individual study
@@ -16,15 +16,11 @@
 #' @param serv serving size of each individual study
 #' @param stdserv serving size of pooled total effect
 #' @param rr relative risk function, either "exponential" or identity"
-#' @param pmodel model used for back-calculated mediation proportion, either
-#' "fixed" or "random" effects model
 #' @param prec precision of pooled estimates
 #' @param weight.prec precision of weights on individual studies
 #'
-#' @return data frames of meta-analysis tables for mediation proportion and
-#' total effect, pooled mediation proportion and total effect results, and
-#' heterogeneity statistics
-#' @export
+#' @return list of data frame of meta-analysis of the total effects, pooled
+#' mediation proportion and total effect results, and heterogeneity statistics
 #' @import stats
 #'
 #'
@@ -52,8 +48,7 @@
 #'                author = paste("Study", seq(1:S)),
 #'                serv = 1,
 #'                stdserv = 1,
-#'                rr = "identity",
-#'                pmodel = "fixed")
+#'                rr = "identity")
 metamed <- function(te,
                     te_lb,
                     te_ub = NULL,
@@ -65,7 +60,6 @@ metamed <- function(te,
                     serv = 1,
                     stdserv = 1,
                     rr = "exp",
-                    pmodel = NULL,
                     prec = 3,
                     weight.prec = 2){
 
@@ -73,14 +67,11 @@ metamed <- function(te,
   if (!rr %in% c("exp", "identity"))
     stop("Relative risk function form must be specified as either \"exp\" or
          \"identity\"")
-  if (!pmodel %in% c("fixed", "random") & !is.null(pmodel))
-    stop("Back-calculated pooled mediation proportion function must be
-         specified as either \"random\" or \"fixed\" effects")
 
   # get indices from type of study
   sb_ind <- !is.na(te) & !is.na(de)
   sd_ind <- is.na(te) & !is.na(de)
-  st_ind <- is.na(te) & !is.na(de)
+  st_ind <- !is.na(te) & is.na(de)
 
   if (rr == "exp"){
     te <- log(te)
@@ -91,7 +82,7 @@ metamed <- function(te,
     if (!is.null(de_ub)) de_ub <- log(de_ub)
   }
 
-  # standardize
+  # standardize serving
   te <- te * stdserv / serv
   te_lb <- te_lb * stdserv / serv
   de <- de * stdserv / serv
@@ -106,7 +97,6 @@ metamed <- function(te,
   } else{
     te_var <- (((te_ub - te_lb)/2) / qnorm(0.975))^2
   }
-
   if (is.null(de_ub)){
     de_ub <- de + abs(de-de_lb)
     de_var <- ((de-de_lb) / qnorm(0.975))^2
@@ -114,28 +104,28 @@ metamed <- function(te,
     de_var <- (((de_ub - de_lb)/2) / qnorm(0.975))^2
   }
 
-  # individual MP's and CI's (fixed effects)
+  # pooled mediation proportion
+  de.bar <- sum(de[sb_ind] / de_var[sb_ind]) / sum(1 / de_var[sb_ind])
+  te.bar <- sum(te[sb_ind] / te_var[sb_ind]) / sum(1 / te_var[sb_ind])
+  debar_var <- 1 / sum(1 / de_var[sb_ind])
+  tebar_var <- 1 / sum(1 / te_var[sb_ind])
+  cov <- corr * sqrt(debar_var) * sqrt(tebar_var)
+  pbar <- 1 - de.bar / te.bar
+  pbar_var <- (de.bar^2) * tebar_var / (te.bar^4) +
+    debar_var / (te.bar^2) - 2 * cov * de.bar / (te.bar^3)
+  pbar_ci <- c(pbar - qnorm(0.975) * sqrt(pbar_var),
+               pbar + qnorm(0.975) * sqrt(pbar_var))
+
+  # heterogeneity measures for MP
   p <- 1 - de/te
   cov <- corr * sqrt(de_var) * sqrt(te_var)
   p_var <- (de^2)*te_var/(te^4) + de_var/(te^2) - 2*de*cov/(te^3)
   p_w.fix <- 1 / p_var
-  p_lb <- p - qnorm(0.975) * sqrt(p_var)
-  p_ub <- p + qnorm(0.975) * sqrt(p_var)
-
-  # MP fixed effects
-  pbar.fix <- sum(p * p_w.fix, na.rm = T) / sum(p_w.fix, na.rm = T)
-  pbar_var.fix <- 1 / sum(p_w.fix, na.rm = T)
-  pbar_lb.fix <- pbar.fix - qnorm(0.975) * sqrt(pbar_var.fix)
-  pbar_ub.fix <- pbar.fix + qnorm(0.975) * sqrt(pbar_var.fix)
-  pbar_ci.fix <- c(pbar_lb.fix, pbar_ub.fix)
-
-  # heterogeneity stats for MP
-  Q_p <- sum(p_w.fix * p^2, na.rm = T) - sum(p_w.fix*p, na.rm = T)^2 /
+  Q_p <- sum(p_w.fix * p^2, na.rm = TRUE) - sum(p_w.fix * p, na.rm = TRUE)^2 /
     sum(p_w.fix, na.rm = T)
-  #print(paste("Q_p:", Q_p))
   df_p <- sum(sb_ind)
-  #print(paste("p-val:", 1 - pchisq(Q_p, df_p-1)))
-  C_p <- sum(p_w.fix, na.rm = T) - sum(p_w.fix^2, na.rm = T) / sum(p_w.fix, na.rm = T)
+  C_p <- sum(p_w.fix, na.rm = TRUE) - sum(p_w.fix^2, na.rm = TRUE) /
+    sum(p_w.fix, na.rm = TRUE)
   tausq_p <- max(c((Q_p - df_p ) / C_p, 0))
   Isq_p <- (Q_p - df_p) / Q_p
   #print(paste("Isq stat:", Isq_p))
@@ -144,49 +134,27 @@ metamed <- function(te,
   p_w.rand <- 1 / (p_var + tausq_p)
   pbar.rand <- sum(p * p_w.rand, na.rm = T) / sum(p_w.rand, na.rm = T)
   pbar_var.rand <- 1 / sum(p_w.rand, na.rm = T)
-  pbar_lb.rand <- pbar.rand - qnorm(0.975) * sqrt(pbar_var.rand)
-  pbar_ub.rand <- pbar.rand + qnorm(0.975) * sqrt(pbar_var.rand)
-  pbar_ci.rand <- c(pbar_lb.rand, pbar_ub.rand)
+  pbar_ci.rand <- c(pbar.rand - qnorm(0.975) * sqrt(pbar_var.rand),
+                    pbar.rand + qnorm(0.975) * sqrt(pbar_var.rand))
 
   CVb_p <- sqrt(tausq_p) / pbar.rand
-  #print(paste("CVb stat:", CVb_p))
-
-  # rounding
-  p <- sprintf(paste0("%.", prec, "f"), p)
-  p_ci <- paste0("(", sprintf(paste0("%.", prec, "f"), p_lb[sb_ind]), ", ",
-                 sprintf(paste0("%.", prec, "f"), p_ub[sb_ind]), ")")
-  p_w.fix <- sprintf(paste0("%.", weight.prec, "f"), p_w.fix[sb_ind] * 100 /
-                       sum(p_w.fix[sb_ind]))
-  p_w.rand <- sprintf(paste0("%.", weight.prec, "f"), p_w.rand[sb_ind] * 100 /
-                        sum(p_w.rand[sb_ind]))
-
-  pdf <- data.frame(author[sb_ind], p[sb_ind], p_ci, p_w.fix,  p_w.rand)
-  names(pdf) <- c("Study", "MP", "95% CI", "Weight (fixed)", "Weight (random)")
 
   # back-calculated total effect
-  if (pmodel == "fixed"){
-    tebc <- de[sd_ind] / (1 - pbar.fix)
-    tebc_var <- pbar_var.fix * (de[sd_ind]^2) / (1-pbar.fix)^4 +
-      de_var[sd_ind] / (1-pbar.fix)^2
-  } else{
-    tebc <- de[sd_ind] / (1 - pbar.rand)
-    tebc_var <- pbar_var.rand * (de[sd_ind]^2) / (1-pbar.rand)^4 +
-      de_var[sd_ind] / (1-pbar.rand)^2
-  }
-  te[sd_ind] <- tebc
-  te_var[sd_ind] <- tebc_var
+  te[sd_ind] <- de[sd_ind] / (1 - pbar)
+  te_var[sd_ind] <- pbar_var * de[sd_ind]^2 / (1 - pbar)^4 +
+    de_var[sd_ind] / (1 - pbar)^2
   te_lb[sd_ind] <- te[sd_ind] - qnorm(0.975) * sqrt(te_var[sd_ind])
   te_ub[sd_ind] <- te[sd_ind] + qnorm(0.975) * sqrt(te_var[sd_ind])
   te_w.fix <- 1 / te_var
+  #tebcbar <- sum(te[sd_ind] / te_var[sd_ind]) / sum(1 / te_var[sd_ind])
 
   # TE fixed effects
   te.fix <- sum(te * te_w.fix) / sum(te_w.fix)
   te_var.fix <- 1 / sum(te_w.fix)
-  te_lb.fix <- te.fix - qnorm(0.975) * sqrt(te_var.fix)
-  te_ub.fix <- te.fix + qnorm(0.975) * sqrt(te_var.fix)
-  te_ci.fix <- c(te_lb.fix, te_ub.fix)
+  te_ci.fix <- c(te.fix - qnorm(0.975) * sqrt(te_var.fix),
+                 te.fix + qnorm(0.975) * sqrt(te_var.fix))
 
-  # heterogeneity stats for MP
+  # heterogeneity stats for TE
   Q_te <- sum(te_w.fix * te^2) - sum(te_w.fix * te)^2 / sum(te_w.fix)
   df_te <- length(te)
   C_te <- sum(te_w.fix) - sum(te_w.fix^2)/sum(te_w.fix)
@@ -214,6 +182,7 @@ metamed <- function(te,
     te.fix <- exp(te.fix)
     te.rand <- exp(te.rand)
     te_ci.fix <- exp(te_ci.fix)
+
     te_ci.rand <- exp(te_ci.rand)
   }
 
@@ -227,40 +196,14 @@ metamed <- function(te,
   tedf <- data.frame(author, te, te_ci, te_w.fix, te_w.rand)
   names(tedf) <- c("Study", "TE", "95% CI", "Weight (fixed)", "Weight (random)")
 
-  ### PLOTTING
-  #require(gplots)
-  # par(mar = c(5, 6, 3, 2), mgp = c(2.3, 0.6, 0))
-  # plotCI(c(pbar.rand, pbar.fix, rev(p[both_ind])), 1:nrow(pdf),
-  #        ui = c(pbar_ub.rand, pbar_ub.fix, rev(p_ub[both_ind])),
-  #        li = c(pbar_lb.rand, pbar_lb.fix, rev(p_lb[both_ind])),
-  #        err = "x", xlab = "Mediation Proportion", ylab = "", axes = F, pch = 20)
-  # axis(side = 1, cex.axis = 0.75, tck = -0.015)
-  # axis(side = 2, at = 1:nrow(pdf), label = rev(pdf$Study), las = 2,
-  #      cex.axis = 0.75, tck = -0.015)
-
-
-  # max(ceiling(log2(te_all_ub)))
-  # plotCI(c(te.rand, te.fix, rev(log(te_all[sind]))), 1:nrow(tedf),
-  #        ui = c(te_ub.rand, te_ub.fix, rev(log(te_all_ub[sind]))),
-  #        li = c(te_lb.rand, te_lb.fix, rev(log(te_all_lb[sind]))),
-  #        err = "x", xlab = "Total Effect (RR)", ylab = "", axes = F, pch = 20,
-  #        xlim = c(log(0.5), log(2^max(ceiling(log2(te_all_ub))))))
-  # aty <- 2^(-1:max(ceiling(log2(te_all_ub))))
-  # axis(side = 1, at = log(aty), labels = aty, cex.axis = 0.75, tck = -0.015)
-  # axis(side = 2, at = 1:nrow(tedf), label = rev(tedf$Study), las = 2,
-  #      cex.axis = 0.75, tck = -0.015)
-  # abline(v = 0, lty = 2)
-
   return(list("TE" = tedf,
-              "MP" = pdf,
-              "pbar.fix" = pbar.fix,
-              "pbar.ci.fix" = pbar_ci.fix,
-              "pbar.rand" = pbar.rand,
-              "pbar.ci.rand" = pbar_ci.rand,
-              "te.fix" = te.fix,
-              "te.ci.fix" = te_ci.fix,
-              "te.rand" = te.rand,
-              "te.ci.rand" = te_ci.rand
-  ))
+         "pbar" = pbar,
+         "pbar.ci" = pbar_ci,
+         "pbar.tau2" = tausq_p,
+         "te.fix" = te.fix,
+         "te.ci.fix" = te_ci.fix,
+         "te.rand" = te.rand,
+         "te.ci.rand" = te_ci.rand,
+         "te.tau2" = tausq_te)
+  )
 }
-
